@@ -329,3 +329,112 @@ TEST_CASE("TreeModel addItem and navigation", "[treemodel]") {
         REQUIRE_FALSE(model.index(0, 5).isValid());    // Column out of range
     }
 }
+
+TEST_CASE("TreeModel property round-trips", "[treemodel]") {
+    TreeModel model;
+    auto idx = addTestItem(model, Types::Image, 0, UString("img"));
+
+    SECTION("name") {
+        model.setName(idx, UString("renamed"));
+        REQUIRE(model.name(idx) == UString("renamed"));
+    }
+
+    SECTION("text") {
+        model.setText(idx, UString("some text"));
+        REQUIRE(model.text(idx) == UString("some text"));
+    }
+
+    SECTION("info") {
+        model.setInfo(idx, UString("some info"));
+        REQUIRE(model.info(idx) == UString("some info"));
+    }
+
+    SECTION("addInfo append") {
+        model.setInfo(idx, UString("base"));
+        model.addInfo(idx, UString(" extra"), true);
+        REQUIRE(model.info(idx) == UString("base extra"));
+    }
+
+    SECTION("addInfo prepend") {
+        model.setInfo(idx, UString("base"));
+        model.addInfo(idx, UString("prefix "), false);
+        REQUIRE(model.info(idx) == UString("prefix base"));
+    }
+
+    SECTION("type and subtype") {
+        model.setType(idx, Types::Volume);
+        model.setSubtype(idx, Subtypes::Ffs3Volume);
+        REQUIRE(model.type(idx) == Types::Volume);
+        REQUIRE(model.subtype(idx) == Subtypes::Ffs3Volume);
+    }
+
+    SECTION("offset") {
+        model.setOffset(idx, 0x1000);
+        REQUIRE(model.offset(idx) == 0x1000);
+    }
+
+    SECTION("action") {
+        REQUIRE(model.action(idx) == Actions::NoAction);
+        model.setAction(idx, Actions::Remove);
+        REQUIRE(model.action(idx) == Actions::Remove);
+    }
+
+    SECTION("marking") {
+        model.setMarking(idx, BootGuardMarking::BootGuardFullyInRange);
+        REQUIRE(model.marking(idx) == BootGuardMarking::BootGuardFullyInRange);
+    }
+
+    SECTION("compressed") {
+        REQUIRE(model.compressed(idx) == false);
+        model.setCompressed(idx, true);
+        REQUIRE(model.compressed(idx) == true);
+    }
+
+    SECTION("all return defaults for invalid index") {
+        UModelIndex invalid;
+        REQUIRE(model.name(invalid) == UString());
+        REQUIRE(model.text(invalid) == UString());
+        REQUIRE(model.info(invalid) == UString());
+        REQUIRE(model.header(invalid) == UByteArray());
+        REQUIRE(model.body(invalid) == UByteArray());
+        REQUIRE(model.tail(invalid) == UByteArray());
+        REQUIRE(model.offset(invalid) == 0);
+        REQUIRE(model.type(invalid) == 0);
+        REQUIRE(model.subtype(invalid) == 0);
+        REQUIRE(model.action(invalid) == Actions::NoAction);
+        REQUIRE(model.fixed(invalid) == false);
+        REQUIRE(model.compressed(invalid) == false);
+        REQUIRE(model.hasEmptyHeader(invalid) == true);
+        REQUIRE(model.hasEmptyBody(invalid) == true);
+        REQUIRE(model.hasEmptyTail(invalid) == true);
+    }
+}
+
+TEST_CASE("TreeModel::base calculation", "[treemodel]") {
+    TreeModel model;
+
+    SECTION("top-level item base equals its offset") {
+        auto img = addTestItem(model, Types::Image, 0, UString("img"), 0x100);
+        REQUIRE(model.base(img) == 0x100);
+    }
+
+    SECTION("grandchild base sums offsets") {
+        auto img = addTestItem(model, Types::Image, 0, UString("img"), 0x100);
+        auto vol = addTestItem(model, Types::Volume, 0, UString("vol"), 0x50,
+                               UByteArray(), UByteArray(), UByteArray(), img);
+        REQUIRE(model.base(vol) == 0x150);
+    }
+
+    SECTION("three levels deep") {
+        auto img = addTestItem(model, Types::Image, 0, UString("img"), 0x1000);
+        auto vol = addTestItem(model, Types::Volume, 0, UString("vol"), 0x200,
+                               UByteArray(), UByteArray(), UByteArray(), img);
+        auto file = addTestItem(model, Types::File, 0, UString("file"), 0x30,
+                                UByteArray(), UByteArray(), UByteArray(), vol);
+        REQUIRE(model.base(file) == 0x1230);
+    }
+
+    SECTION("invalid index returns 0") {
+        REQUIRE(model.base(UModelIndex()) == 0);
+    }
+}
