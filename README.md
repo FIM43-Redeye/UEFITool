@@ -1,4 +1,18 @@
-# UEFITool
+# UEFITool (Independent Fork)
+
+> **This is an independent fork. It is not affiliated with or endorsed by the original
+> UEFITool maintainers.** This fork was built primarily using AI-assisted development.
+>
+> **Please DO NOT contact the original maintainers for support regarding this fork.**
+> They are not responsible for any changes made here. File issues on
+> [this fork's issue tracker](https://github.com/FIM43-Redeye/UEFITool/issues) instead.
+>
+> **NEVER submit AI-assisted contributions to the
+> [original UEFITool repository](https://github.com/LongSoft/UEFITool) under any
+> circumstances.** The upstream maintainer has explicitly prohibited this and will ban
+> contributors who do so.
+
+---
 
 UEFITool is a viewer and editor of firmware images conforming to UEFI Platform Interface (PI) Specifications.
 
