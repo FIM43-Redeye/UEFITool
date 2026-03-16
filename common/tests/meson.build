@@ -6,6 +6,9 @@ test_sources = files(
   'test_treemodel.cpp',
   'test_guiddatabase.cpp',
   'catch2/catch_amalgamated.cpp',
+  # ffsops.cpp is not part of uefitoolcommon static library,
+  # so we compile it directly into the test binary.
+  '../ffsops.cpp',
 )
 
 uefitool_tests = executable('uefitool_tests',
