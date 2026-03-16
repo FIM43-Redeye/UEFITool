@@ -202,3 +202,130 @@ TEST_CASE("TreeItem child management", "[treeitem]") {
         delete child;
     }
 }
+
+// ---------------------------------------------------------------------------
+// TreeModel tests (Tasks 4-6)
+// ---------------------------------------------------------------------------
+
+// Helper to add a simple item to the model. Reduces boilerplate.
+static UModelIndex addTestItem(TreeModel& model, UINT8 type, UINT8 subtype,
+                               const UString& name, UINT32 offset = 0,
+                               const UByteArray& header = UByteArray(),
+                               const UByteArray& body = UByteArray(),
+                               const UByteArray& tail = UByteArray(),
+                               const UModelIndex& parent = UModelIndex(),
+                               UINT8 mode = CREATE_MODE_APPEND) {
+    return model.addItem(offset, type, subtype, name, UString(), UString(),
+                         header, body, tail, Movable, parent, mode);
+}
+
+TEST_CASE("TreeModel construction", "[treemodel]") {
+    TreeModel model;
+
+    SECTION("fresh model has no visible children") {
+        REQUIRE(model.rowCount() == 0);
+    }
+
+    SECTION("columnCount is always 5") {
+        REQUIRE(model.columnCount() == 5);
+    }
+}
+
+TEST_CASE("TreeModel addItem and navigation", "[treemodel]") {
+    TreeModel model;
+
+    SECTION("append creates valid index") {
+        auto idx = addTestItem(model, Types::Image, Subtypes::UefiImage, UString("img"));
+        REQUIRE(idx.isValid());
+        REQUIRE(model.rowCount() == 1);
+        REQUIRE(model.name(idx) == UString("img"));
+    }
+
+    SECTION("multiple appends maintain order") {
+        auto a = addTestItem(model, Types::Image, 0, UString("first"));
+        auto b = addTestItem(model, Types::Image, 0, UString("second"));
+
+        REQUIRE(model.rowCount() == 2);
+        auto first = model.index(0, 0);
+        auto second = model.index(1, 0);
+        REQUIRE(model.name(first) == UString("first"));
+        REQUIRE(model.name(second) == UString("second"));
+    }
+
+    SECTION("prepend inserts at beginning") {
+        auto a = addTestItem(model, Types::Image, 0, UString("first"));
+        auto b = addTestItem(model, Types::Image, 0, UString("prepended"),
+                             0, UByteArray(), UByteArray(), UByteArray(),
+                             UModelIndex(), CREATE_MODE_PREPEND);
+
+        auto first = model.index(0, 0);
+        REQUIRE(model.name(first) == UString("prepended"));
+    }
+
+    SECTION("insert before") {
+        auto a = addTestItem(model, Types::Image, 0, UString("a"));
+        auto b = addTestItem(model, Types::Image, 0, UString("b"));
+        auto c = addTestItem(model, Types::Image, 0, UString("c"),
+                             0, UByteArray(), UByteArray(), UByteArray(),
+                             b, CREATE_MODE_BEFORE);
+
+        REQUIRE(model.rowCount() == 3);
+        REQUIRE(model.name(model.index(0, 0)) == UString("a"));
+        REQUIRE(model.name(model.index(1, 0)) == UString("c"));
+        REQUIRE(model.name(model.index(2, 0)) == UString("b"));
+    }
+
+    SECTION("insert after") {
+        auto a = addTestItem(model, Types::Image, 0, UString("a"));
+        auto b = addTestItem(model, Types::Image, 0, UString("b"));
+        auto c = addTestItem(model, Types::Image, 0, UString("c"),
+                             0, UByteArray(), UByteArray(), UByteArray(),
+                             a, CREATE_MODE_AFTER);
+
+        REQUIRE(model.rowCount() == 3);
+        REQUIRE(model.name(model.index(0, 0)) == UString("a"));
+        REQUIRE(model.name(model.index(1, 0)) == UString("c"));
+        REQUIRE(model.name(model.index(2, 0)) == UString("b"));
+    }
+
+    SECTION("invalid mode returns invalid index") {
+        auto idx = addTestItem(model, Types::Image, 0, UString("bad"),
+                               0, UByteArray(), UByteArray(), UByteArray(),
+                               UModelIndex(), 99);
+        REQUIRE_FALSE(idx.isValid());
+        REQUIRE(model.rowCount() == 0);
+    }
+
+    SECTION("parent of top-level item is invalid (root is hidden)") {
+        auto img = addTestItem(model, Types::Image, 0, UString("img"));
+        auto parent = model.parent(img);
+        REQUIRE_FALSE(parent.isValid());
+    }
+
+    SECTION("grandchild navigation works") {
+        auto img = addTestItem(model, Types::Image, 0, UString("img"));
+        auto vol = addTestItem(model, Types::Volume, 0, UString("vol"),
+                               0, UByteArray(), UByteArray(), UByteArray(), img);
+
+        REQUIRE(model.rowCount(img) == 1);
+        auto volIdx = model.index(0, 0, img);
+        REQUIRE(model.name(volIdx) == UString("vol"));
+
+        auto volParent = model.parent(volIdx);
+        REQUIRE(volParent.isValid());
+        REQUIRE(model.name(volParent) == UString("img"));
+    }
+
+    SECTION("rowCount with column > 0 returns 0") {
+        addTestItem(model, Types::Image, 0, UString("img"));
+        auto colIdx = model.index(0, 1);
+        REQUIRE(model.rowCount(colIdx) == 0);
+    }
+
+    SECTION("index out of range returns invalid") {
+        REQUIRE_FALSE(model.index(0, 0).isValid());  // No children yet
+        addTestItem(model, Types::Image, 0, UString("img"));
+        REQUIRE_FALSE(model.index(1, 0).isValid());   // Only 1 child
+        REQUIRE_FALSE(model.index(0, 5).isValid());    // Column out of range
+    }
+}
