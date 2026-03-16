@@ -17,9 +17,7 @@ uefitool_tests = executable('uefitool_tests',
     '-DU_ENABLE_FIT_PARSING_SUPPORT',
     '-DU_ENABLE_GUID_DATABASE_SUPPORT',
   ],
-  # Note: override_options requires Meson >= 0.51. The root meson.build
-  # declares >=0.45.0 but C++14 override is needed for Catch2 v3.
-  override_options: ['cpp_std=c++14'],
+  override_options: ['cpp_std=c++23'],
 )
 
 test('uefitool_tests', uefitool_tests)

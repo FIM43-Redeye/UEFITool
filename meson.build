@@ -1,8 +1,8 @@
 project('UEFITool', ['c', 'cpp'],
   version: 'A74',
   license: 'BSD-2-Clause',
-  meson_version: '>=0.45.0',
-  default_options : ['c_std=c11', 'cpp_std=c++11'],
+  meson_version: '>=0.51.0',
+  default_options : ['c_std=c11', 'cpp_std=c++23'],
 )
 
 zlib = dependency('zlib')
