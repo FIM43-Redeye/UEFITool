@@ -8,3 +8,108 @@ TEST_CASE("Smoke test: treemodel compiles and links", "[treemodel][smoke]") {
     TreeModel model;
     REQUIRE(model.columnCount() == 5);
 }
+
+TEST_CASE("TreeItem construction", "[treeitem]") {
+    UByteArray header("\x01\x02", 2);
+    UByteArray body("\x03\x04\x05", 3);
+    UByteArray tail("\x06", 1);
+
+    TreeItem item(0x100, Types::File, 0, UString("TestFile"),
+                  UString("test text"), UString("test info"),
+                  header, body, tail, true, false);
+
+    SECTION("all constructor values stored correctly") {
+        REQUIRE(item.offset() == 0x100);
+        REQUIRE(item.type() == Types::File);
+        REQUIRE(item.subtype() == 0);
+        REQUIRE(item.name() == UString("TestFile"));
+        REQUIRE(item.text() == UString("test text"));
+        REQUIRE(item.info() == UString("test info"));
+        REQUIRE(item.header() == header);
+        REQUIRE(item.body() == body);
+        REQUIRE(item.tail() == tail);
+        REQUIRE(item.fixed() == true);
+        REQUIRE(item.compressed() == false);
+    }
+
+    SECTION("action defaults to NoAction") {
+        REQUIRE(item.action() == Actions::NoAction);
+    }
+
+    SECTION("marking defaults to 0") {
+        REQUIRE(item.marking() == 0);
+    }
+
+    SECTION("null parent is valid") {
+        REQUIRE(item.parent() == nullptr);
+    }
+
+    SECTION("childCount starts at 0") {
+        REQUIRE(item.childCount() == 0);
+    }
+
+    SECTION("columnCount is always 5") {
+        REQUIRE(item.columnCount() == 5);
+    }
+
+    SECTION("row with no parent returns 0") {
+        REQUIRE(item.row() == 0);
+    }
+}
+
+TEST_CASE("TreeItem data concatenation", "[treeitem]") {
+    SECTION("entire() returns header + body + tail") {
+        UByteArray header("\x01\x02", 2);
+        UByteArray body("\x03\x04\x05", 3);
+        UByteArray tail("\x06", 1);
+        TreeItem item(0, Types::File, 0, UString(), UString(), UString(),
+                      header, body, tail, false, false);
+
+        UByteArray expected("\x01\x02\x03\x04\x05\x06", 6);
+        REQUIRE(item.entire() == expected);
+    }
+
+    SECTION("entire() with empty tail") {
+        UByteArray header("\xAA", 1);
+        UByteArray body("\xBB", 1);
+        TreeItem item(0, Types::File, 0, UString(), UString(), UString(),
+                      header, body, UByteArray(), false, false);
+
+        UByteArray expected("\xAA\xBB", 2);
+        REQUIRE(item.entire() == expected);
+    }
+
+    SECTION("entire() with all empty") {
+        TreeItem item(0, Types::File, 0, UString(), UString(), UString(),
+                      UByteArray(), UByteArray(), UByteArray(), false, false);
+        REQUIRE(item.entire().isEmpty());
+    }
+
+    SECTION("addInfo appends") {
+        TreeItem item(0, Types::File, 0, UString(), UString(), UString("base"),
+                      UByteArray(), UByteArray(), UByteArray(), false, false);
+        item.addInfo(UString(" added"), true);
+        REQUIRE(item.info() == UString("base added"));
+    }
+
+    SECTION("addInfo prepends") {
+        TreeItem item(0, Types::File, 0, UString(), UString(), UString("base"),
+                      UByteArray(), UByteArray(), UByteArray(), false, false);
+        item.addInfo(UString("prefix "), false);
+        REQUIRE(item.info() == UString("prefix base"));
+    }
+}
+
+TEST_CASE("TreeItem::data columns", "[treeitem]") {
+    TreeItem item(0, Types::Volume, Subtypes::Ffs2Volume, UString("MyVol"),
+                  UString("vol text"), UString("vol info"),
+                  UByteArray(), UByteArray(), UByteArray(), false, false);
+
+    REQUIRE(item.data(0) == UString("MyVol"));          // Name
+    REQUIRE(item.data(1) == UString());                  // Action (NoAction = empty)
+    REQUIRE(item.data(2) == UString("Volume"));          // Type
+    REQUIRE(item.data(3) == UString("FFSv2"));           // Subtype
+    REQUIRE(item.data(4) == UString("vol text"));        // Text
+    REQUIRE(item.data(5) == UString());                  // Invalid column
+    REQUIRE(item.data(-1) == UString());                 // Negative column
+}
