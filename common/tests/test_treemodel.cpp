@@ -583,3 +583,110 @@ TEST_CASE("TreeModel::findByBase", "[treemodel]") {
         REQUIRE_FALSE(found.isValid());
     }
 }
+
+// ---------------------------------------------------------------------------
+// UModelIndex tests (Task 7)
+// ---------------------------------------------------------------------------
+
+TEST_CASE("UModelIndex basics", "[umodelindex]") {
+    SECTION("default index is invalid") {
+        UModelIndex idx;
+        REQUIRE_FALSE(idx.isValid());
+        REQUIRE(idx.row() == -1);
+        REQUIRE(idx.column() == -1);
+    }
+
+    SECTION("created index is valid") {
+        TreeModel model;
+        auto img = addTestItem(model, Types::Image, 0, UString("img"));
+        REQUIRE(img.isValid());
+        REQUIRE(img.row() == 0);
+        REQUIRE(img.column() == 0);
+    }
+
+    SECTION("two indexes to same item are equal") {
+        TreeModel model;
+        addTestItem(model, Types::Image, 0, UString("img"));
+        auto a = model.index(0, 0);
+        auto b = model.index(0, 0);
+        REQUIRE(a == b);
+    }
+
+    SECTION("indexes to different items are not equal") {
+        TreeModel model;
+        addTestItem(model, Types::Image, 0, UString("a"));
+        addTestItem(model, Types::Image, 0, UString("b"));
+        auto a = model.index(0, 0);
+        auto b = model.index(1, 0);
+        REQUIRE(a != b);
+    }
+
+    SECTION("internalPointer recovers TreeItem") {
+        TreeModel model;
+        auto idx = addTestItem(model, Types::Image, 0, UString("img"));
+        auto* item = static_cast<TreeItem*>(idx.internalPointer());
+        REQUIRE(item != nullptr);
+        REQUIRE(item->name() == UString("img"));
+    }
+}
+
+TEST_CASE("TreeModel::data roles", "[treemodel]") {
+    TreeModel model;
+    auto idx = addTestItem(model, Types::Image, Subtypes::UefiImage, UString("img"));
+    model.setInfo(idx, UString("test info"));
+
+    SECTION("role 0 returns column display data") {
+        // Column 0 = name
+        auto nameIdx = model.index(0, 0);
+        REQUIRE(model.data(nameIdx, 0) == UString("img"));
+    }
+
+    SECTION("role 0x0100 returns info") {
+        auto nameIdx = model.index(0, 0);
+        REQUIRE(model.data(nameIdx, 0x0100) == UString("test info"));
+    }
+
+    SECTION("other roles return empty") {
+        auto nameIdx = model.index(0, 0);
+        REQUIRE(model.data(nameIdx, 42) == UString());
+    }
+
+    SECTION("invalid index returns empty") {
+        REQUIRE(model.data(UModelIndex(), 0) == UString());
+    }
+}
+
+TEST_CASE("TreeModel::headerData", "[treemodel]") {
+    TreeModel model;
+
+    // orientation=1 (Horizontal), role=0 (DisplayRole)
+    REQUIRE(model.headerData(0, 1, 0) == UString("Name"));
+    REQUIRE(model.headerData(1, 1, 0) == UString("Action"));
+    REQUIRE(model.headerData(2, 1, 0) == UString("Type"));
+    REQUIRE(model.headerData(3, 1, 0) == UString("Subtype"));
+    REQUIRE(model.headerData(4, 1, 0) == UString("Text"));
+
+    // Wrong orientation
+    REQUIRE(model.headerData(0, 0, 0) == UString());
+
+    // Wrong role
+    REQUIRE(model.headerData(0, 1, 1) == UString());
+}
+
+TEST_CASE("TreeModel marking", "[treemodel]") {
+    TreeModel model;
+
+    SECTION("markingEnabled defaults to false (non-Qt)") {
+        REQUIRE(model.markingEnabled() == false);
+    }
+
+    SECTION("marking round-trip") {
+        model.setMarkingEnabled(true);
+        REQUIRE(model.markingEnabled() == true);
+    }
+
+    SECTION("dark mode round-trip") {
+        model.setMarkingDarkMode(true);
+        REQUIRE(model.markingDarkMode() == true);
+    }
+}
