@@ -690,3 +690,143 @@ TEST_CASE("TreeModel marking", "[treemodel]") {
         REQUIRE(model.markingDarkMode() == true);
     }
 }
+
+// ---------------------------------------------------------------------------
+// FfsOperations tests (Task 8)
+// ---------------------------------------------------------------------------
+
+TEST_CASE("FfsOperations::extract", "[ffsops]") {
+    TreeModel model;
+    FfsOperations ops(&model);
+
+    UByteArray header("\x01\x02", 2);
+    UByteArray body("\x03\x04\x05", 3);
+    UByteArray tail("\x06", 1);
+
+    auto idx = model.addItem(0, Types::File, 0, UString("TestFile"), UString(), UString(),
+                             header, body, tail, Movable);
+
+    UString name;
+    UByteArray extracted;
+
+    SECTION("AS_IS extracts entire") {
+        REQUIRE(ops.extract(idx, name, extracted, EXTRACT_MODE_AS_IS) == U_SUCCESS);
+        UByteArray expected("\x01\x02\x03\x04\x05\x06", 6);
+        REQUIRE(extracted == expected);
+    }
+
+    SECTION("BODY extracts body only, appends _body to name") {
+        REQUIRE(ops.extract(idx, name, extracted, EXTRACT_MODE_BODY) == U_SUCCESS);
+        REQUIRE(extracted == body);
+        // Name should end with _body
+        REQUIRE(name.length() > 5);
+    }
+
+    SECTION("UNCOMPRESSED extracts uncompressed data") {
+        UByteArray ucdata("\xAA\xBB\xCC", 3);
+        model.setUncompressedData(idx, ucdata);
+        REQUIRE(ops.extract(idx, name, extracted, EXTRACT_MODE_UNCOMPRESSED) == U_SUCCESS);
+        REQUIRE(extracted == ucdata);
+    }
+
+    SECTION("invalid mode returns U_UNKNOWN_EXTRACT_MODE") {
+        REQUIRE(ops.extract(idx, name, extracted, 99) == U_UNKNOWN_EXTRACT_MODE);
+    }
+
+    SECTION("invalid index returns U_INVALID_PARAMETER") {
+        REQUIRE(ops.extract(UModelIndex(), name, extracted, EXTRACT_MODE_AS_IS)
+                == U_INVALID_PARAMETER);
+    }
+}
+
+TEST_CASE("FfsOperations::replace", "[ffsops]") {
+    TreeModel model;
+    FfsOperations ops(&model);
+
+    auto idx = addTestItem(model, Types::File, 0, UString("file"));
+    UByteArray data("test", 4);
+
+    SECTION("AS_IS returns U_NOT_IMPLEMENTED") {
+        REQUIRE(ops.replace(idx, data, REPLACE_MODE_AS_IS) == U_NOT_IMPLEMENTED);
+    }
+
+    SECTION("BODY returns U_NOT_IMPLEMENTED") {
+        REQUIRE(ops.replace(idx, data, REPLACE_MODE_BODY) == U_NOT_IMPLEMENTED);
+    }
+
+    SECTION("invalid mode returns U_UNKNOWN_REPLACE_MODE") {
+        REQUIRE(ops.replace(idx, data, 99) == U_UNKNOWN_REPLACE_MODE);
+    }
+
+    SECTION("invalid index returns U_INVALID_PARAMETER") {
+        REQUIRE(ops.replace(UModelIndex(), data, REPLACE_MODE_AS_IS)
+                == U_INVALID_PARAMETER);
+    }
+}
+
+TEST_CASE("FfsOperations::remove", "[ffsops]") {
+    TreeModel model;
+    FfsOperations ops(&model);
+
+    auto idx = addTestItem(model, Types::File, 0, UString("file"));
+
+    SECTION("sets Remove action") {
+        REQUIRE(ops.remove(idx) == U_SUCCESS);
+        REQUIRE(model.action(idx) == Actions::Remove);
+    }
+
+    SECTION("invalid index returns U_INVALID_PARAMETER") {
+        REQUIRE(ops.remove(UModelIndex()) == U_INVALID_PARAMETER);
+    }
+}
+
+TEST_CASE("FfsOperations::rebuild", "[ffsops]") {
+    TreeModel model;
+    FfsOperations ops(&model);
+
+    SECTION("sets Rebuild on item and ancestors up to Root") {
+        auto img = addTestItem(model, Types::Image, 0, UString("img"));
+        auto vol = addTestItem(model, Types::Volume, 0, UString("vol"),
+                               0, UByteArray(), UByteArray(), UByteArray(), img);
+        auto file = addTestItem(model, Types::File, 0, UString("file"),
+                                0, UByteArray(), UByteArray(), UByteArray(), vol);
+
+        REQUIRE(ops.rebuild(file) == U_SUCCESS);
+        REQUIRE(model.action(file) == Actions::Rebuild);
+        REQUIRE(model.action(vol) == Actions::Rebuild);
+        REQUIRE(model.action(img) == Actions::Rebuild);
+    }
+
+    SECTION("does not overwrite existing action on ancestor") {
+        auto img = addTestItem(model, Types::Image, 0, UString("img"));
+        auto vol = addTestItem(model, Types::Volume, 0, UString("vol"),
+                               0, UByteArray(), UByteArray(), UByteArray(), img);
+        auto file = addTestItem(model, Types::File, 0, UString("file"),
+                                0, UByteArray(), UByteArray(), UByteArray(), vol);
+
+        model.setAction(vol, Actions::Remove);
+        REQUIRE(ops.rebuild(file) == U_SUCCESS);
+
+        REQUIRE(model.action(file) == Actions::Rebuild);
+        REQUIRE(model.action(vol) == Actions::Remove);   // NOT overwritten
+        REQUIRE(model.action(img) == Actions::NoAction);  // Walk stopped at vol
+    }
+
+    SECTION("invalid index returns U_INVALID_PARAMETER") {
+        REQUIRE(ops.rebuild(UModelIndex()) == U_INVALID_PARAMETER);
+    }
+}
+
+TEST_CASE("FfsOperations messages", "[ffsops]") {
+    TreeModel model;
+    FfsOperations ops(&model);
+
+    SECTION("messages start empty") {
+        REQUIRE(ops.getMessages().empty());
+    }
+
+    SECTION("clearMessages empties vector") {
+        ops.clearMessages();
+        REQUIRE(ops.getMessages().empty());
+    }
+}

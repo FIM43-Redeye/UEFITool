@@ -24,6 +24,7 @@ SET(COMMON_SOURCES
   ../ffsparser.cpp
   ../amd_microcode.cpp
   ../fitparser.cpp
+  ../ffsops.cpp
   ../ffsreport.cpp
   ../peimage.cpp
   ../treeitem.cpp
