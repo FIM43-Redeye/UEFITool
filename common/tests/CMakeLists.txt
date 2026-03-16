@@ -95,6 +95,8 @@ SET(TEST_SOURCES
   test_ffs.cpp
   test_types.cpp
   test_descriptor.cpp
+  test_treemodel.cpp
+  test_guiddatabase.cpp
 )
 
 ADD_DEFINITIONS(

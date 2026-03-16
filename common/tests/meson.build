@@ -3,6 +3,8 @@ test_sources = files(
   'test_ffs.cpp',
   'test_types.cpp',
   'test_descriptor.cpp',
+  'test_treemodel.cpp',
+  'test_guiddatabase.cpp',
   'catch2/catch_amalgamated.cpp',
 )
 
