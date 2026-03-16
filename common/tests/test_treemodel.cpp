@@ -438,3 +438,148 @@ TEST_CASE("TreeModel::base calculation", "[treemodel]") {
         REQUIRE(model.base(UModelIndex()) == 0);
     }
 }
+
+TEST_CASE("TreeModel::setFixed propagation", "[treemodel]") {
+    TreeModel model;
+
+    SECTION("setting fixed on leaf propagates to ancestors") {
+        auto img = addTestItem(model, Types::Image, 0, UString("img"));
+        auto vol = addTestItem(model, Types::Volume, 0, UString("vol"),
+                               0, UByteArray(), UByteArray(), UByteArray(), img);
+        auto file = addTestItem(model, Types::File, 0, UString("file"),
+                                0, UByteArray(), UByteArray(), UByteArray(), vol);
+
+        REQUIRE(model.fixed(img) == false);
+        REQUIRE(model.fixed(vol) == false);
+        REQUIRE(model.fixed(file) == false);
+
+        model.setFixed(file, true);
+
+        REQUIRE(model.fixed(file) == true);
+        REQUIRE(model.fixed(vol) == true);
+        REQUIRE(model.fixed(img) == true);
+    }
+
+    SECTION("compressed item under uncompressed parent: no upward propagation") {
+        auto img = addTestItem(model, Types::Image, 0, UString("img"));
+        auto vol = addTestItem(model, Types::Volume, 0, UString("vol"),
+                               0, UByteArray(), UByteArray(), UByteArray(), img);
+
+        // Make vol compressed but img stays uncompressed
+        model.setCompressed(vol, true);
+
+        model.setFixed(vol, true);
+
+        // vol should inherit parent's fixed state (false), NOT propagate up
+        REQUIRE(model.fixed(vol) == false);
+        REQUIRE(model.fixed(img) == false);
+    }
+
+    SECTION("setting fixed=false does NOT propagate") {
+        auto img = addTestItem(model, Types::Image, 0, UString("img"));
+        auto vol = addTestItem(model, Types::Volume, 0, UString("vol"),
+                               0, UByteArray(), UByteArray(), UByteArray(), img);
+
+        model.setFixed(vol, true);
+        REQUIRE(model.fixed(img) == true);
+
+        // Now clear leaf -- parent stays fixed
+        model.setFixed(vol, false);
+        REQUIRE(model.fixed(vol) == false);
+        REQUIRE(model.fixed(img) == true);
+    }
+}
+
+TEST_CASE("TreeModel::findParentOfType", "[treemodel]") {
+    TreeModel model;
+
+    auto img = addTestItem(model, Types::Image, 0, UString("img"));
+    auto vol = addTestItem(model, Types::Volume, 0, UString("vol"),
+                           0, UByteArray(), UByteArray(), UByteArray(), img);
+    auto file = addTestItem(model, Types::File, 0, UString("file"),
+                            0, UByteArray(), UByteArray(), UByteArray(), vol);
+    auto section = addTestItem(model, Types::Section, 0, UString("sec"),
+                               0, UByteArray(), UByteArray(), UByteArray(), file);
+
+    SECTION("find Volume from Section") {
+        auto found = model.findParentOfType(section, Types::Volume);
+        REQUIRE(found.isValid());
+        REQUIRE(model.name(found) == UString("vol"));
+    }
+
+    SECTION("find Image from Section") {
+        auto found = model.findParentOfType(section, Types::Image);
+        REQUIRE(found.isValid());
+        REQUIRE(model.name(found) == UString("img"));
+    }
+
+    SECTION("no matching parent returns invalid") {
+        auto found = model.findParentOfType(section, Types::Capsule);
+        REQUIRE_FALSE(found.isValid());
+    }
+
+    SECTION("top-level item has no searchable parent") {
+        auto found = model.findParentOfType(img, Types::Root);
+        REQUIRE_FALSE(found.isValid());
+    }
+}
+
+TEST_CASE("TreeModel::findLastParentOfType", "[treemodel]") {
+    TreeModel model;
+
+    // Build: img > outerVol > innerVol > file
+    auto img = addTestItem(model, Types::Image, 0, UString("img"));
+    auto outerVol = addTestItem(model, Types::Volume, 0, UString("outerVol"),
+                                0, UByteArray(), UByteArray(), UByteArray(), img);
+    auto innerVol = addTestItem(model, Types::Volume, 0, UString("innerVol"),
+                                0, UByteArray(), UByteArray(), UByteArray(), outerVol);
+    auto file = addTestItem(model, Types::File, 0, UString("file"),
+                            0, UByteArray(), UByteArray(), UByteArray(), innerVol);
+
+    SECTION("finds outermost Volume from deeply nested item") {
+        auto found = model.findLastParentOfType(file, Types::Volume);
+        REQUIRE(found.isValid());
+        REQUIRE(model.name(found) == UString("outerVol"));
+    }
+
+    SECTION("no matching parent returns invalid") {
+        auto found = model.findLastParentOfType(file, Types::Capsule);
+        REQUIRE_FALSE(found.isValid());
+    }
+}
+
+TEST_CASE("TreeModel::findByBase", "[treemodel]") {
+    TreeModel model;
+
+    // Build: img(offset=0, size=16) > vol(offset=4, size=8) > file(offset=2, size=4)
+    UByteArray imgData(16, '\x00');
+    UByteArray volData(8, '\x00');
+    UByteArray fileData(4, '\x00');
+
+    auto img = addTestItem(model, Types::Image, 0, UString("img"), 0,
+                           UByteArray(), imgData, UByteArray());
+    auto vol = addTestItem(model, Types::Volume, 0, UString("vol"), 4,
+                           UByteArray(), volData, UByteArray(), img);
+    auto file = addTestItem(model, Types::File, 0, UString("file"), 2,
+                            UByteArray(), fileData, UByteArray(), vol);
+
+    SECTION("finds deepest match") {
+        // file base = 0 + 4 + 2 = 6, size = 4, range [6, 10)
+        auto found = model.findByBase(7);
+        REQUIRE(found.isValid());
+        REQUIRE(model.name(found) == UString("file"));
+    }
+
+    SECTION("finds intermediate when not in deepest") {
+        // vol base = 4, size = 8, range [4, 12)
+        // Address 11 is in vol but not in file (file range [6,10))
+        auto found = model.findByBase(11);
+        REQUIRE(found.isValid());
+        REQUIRE(model.name(found) == UString("vol"));
+    }
+
+    SECTION("address not in any item returns invalid") {
+        auto found = model.findByBase(100);
+        REQUIRE_FALSE(found.isValid());
+    }
+}
