@@ -90,7 +90,10 @@ void initGuidDatabase(const UString & path, UINT32* numEntries)
 
 UString guidDatabaseLookup(const EFI_GUID & guid)
 {
-    return gLocalGuidDatabase[guid];
+    auto it = gLocalGuidDatabase.find(guid);
+    if (it != gLocalGuidDatabase.end())
+        return it->second;
+    return UString();
 }
 
 #else
