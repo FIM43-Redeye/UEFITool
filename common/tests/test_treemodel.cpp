@@ -113,3 +113,92 @@ TEST_CASE("TreeItem::data columns", "[treeitem]") {
     REQUIRE(item.data(5) == UString());                  // Invalid column
     REQUIRE(item.data(-1) == UString());                 // Negative column
 }
+
+TEST_CASE("TreeItem child management", "[treeitem]") {
+    // Parent owns children -- TreeItem destructor deletes them.
+    auto makeChild = [](const UString& name, TreeItem* parent) {
+        return new TreeItem(0, Types::File, 0, name, UString(), UString(),
+                            UByteArray(), UByteArray(), UByteArray(),
+                            false, false, parent);
+    };
+
+    SECTION("appendChild increases count and is retrievable") {
+        TreeItem parent(0, Types::Volume, 0, UString("parent"), UString(), UString(),
+                        UByteArray(), UByteArray(), UByteArray(), false, false);
+        auto* child = makeChild(UString("child0"), &parent);
+        parent.appendChild(child);
+
+        REQUIRE(parent.childCount() == 1);
+        REQUIRE(parent.child(0) == child);
+        REQUIRE(child->row() == 0);
+    }
+
+    SECTION("prependChild inserts at front") {
+        TreeItem parent(0, Types::Volume, 0, UString("parent"), UString(), UString(),
+                        UByteArray(), UByteArray(), UByteArray(), false, false);
+        auto* first = makeChild(UString("first"), &parent);
+        auto* second = makeChild(UString("second"), &parent);
+        parent.appendChild(first);
+        parent.prependChild(second);
+
+        REQUIRE(parent.childCount() == 2);
+        REQUIRE(parent.child(0) == second);
+        REQUIRE(parent.child(1) == first);
+        REQUIRE(second->row() == 0);
+        REQUIRE(first->row() == 1);
+    }
+
+    SECTION("insertChildBefore places correctly") {
+        TreeItem parent(0, Types::Volume, 0, UString("parent"), UString(), UString(),
+                        UByteArray(), UByteArray(), UByteArray(), false, false);
+        auto* a = makeChild(UString("a"), &parent);
+        auto* b = makeChild(UString("b"), &parent);
+        auto* c = makeChild(UString("c"), &parent);
+        parent.appendChild(a);
+        parent.appendChild(b);
+
+        REQUIRE(parent.insertChildBefore(b, c) == U_SUCCESS);
+        REQUIRE(parent.childCount() == 3);
+        REQUIRE(parent.child(0) == a);
+        REQUIRE(parent.child(1) == c);
+        REQUIRE(parent.child(2) == b);
+    }
+
+    SECTION("insertChildBefore with unknown item fails") {
+        TreeItem parent(0, Types::Volume, 0, UString("parent"), UString(), UString(),
+                        UByteArray(), UByteArray(), UByteArray(), false, false);
+        TreeItem other(0, Types::File, 0, UString(), UString(), UString(),
+                       UByteArray(), UByteArray(), UByteArray(), false, false);
+        auto* child = makeChild(UString("child"), &parent);
+
+        REQUIRE(parent.insertChildBefore(&other, child) == U_ITEM_NOT_FOUND);
+        delete child;
+    }
+
+    SECTION("insertChildAfter places correctly") {
+        TreeItem parent(0, Types::Volume, 0, UString("parent"), UString(), UString(),
+                        UByteArray(), UByteArray(), UByteArray(), false, false);
+        auto* a = makeChild(UString("a"), &parent);
+        auto* b = makeChild(UString("b"), &parent);
+        auto* c = makeChild(UString("c"), &parent);
+        parent.appendChild(a);
+        parent.appendChild(b);
+
+        REQUIRE(parent.insertChildAfter(a, c) == U_SUCCESS);
+        REQUIRE(parent.childCount() == 3);
+        REQUIRE(parent.child(0) == a);
+        REQUIRE(parent.child(1) == c);
+        REQUIRE(parent.child(2) == b);
+    }
+
+    SECTION("insertChildAfter with unknown item fails") {
+        TreeItem parent(0, Types::Volume, 0, UString("parent"), UString(), UString(),
+                        UByteArray(), UByteArray(), UByteArray(), false, false);
+        TreeItem other(0, Types::File, 0, UString(), UString(), UString(),
+                       UByteArray(), UByteArray(), UByteArray(), false, false);
+        auto* child = makeChild(UString("child"), &parent);
+
+        REQUIRE(parent.insertChildAfter(&other, child) == U_ITEM_NOT_FOUND);
+        delete child;
+    }
+}
